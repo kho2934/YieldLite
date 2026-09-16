@@ -1,0 +1,37 @@
+# Environment
+.venv/
+.env
+
+# Python build and cache
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.egg-info/
+
+# Tool caches and reports
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Docs build (MkDocs)
+site/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Data: never commit raw or identifiable survey data
+data/
+*.csv
+*.xlsx
+*.sav
+*.dta
+
+# Local editor / OS / Claude Code overrides
+.DS_Store
+.vscode/
+.idea/
+.claude/settings.local.json
