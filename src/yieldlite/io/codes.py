@@ -14,14 +14,14 @@ from typing import Literal
 
 Flag = Literal["certain", "inferred", "unresolved"]
 
-#: These district codes were confirmed in the ĐX 2019-20 and HT 2020 files.
-#: Thới Lai appears in later surveys, so its code can be added after checking
-#: the 2021-2024 files. Unknown district codes are flagged instead of guessed.
+#: District codes confirmed against the full 2020-2024 dataset (5 districts:
+#: OM, CD, VT, TN, TL). Unknown district codes are flagged instead of guessed.
 KNOWN_DISTRICTS: dict[str, str] = {
     "OM": "Ô Môn",
     "CD": "Cờ Đỏ",
     "VT": "Vĩnh Thạnh",
     "TN": "Thốt Nốt",
+    "TL": "Thới Lai",
 }
 
 #: Some commune names are written differently across the original files.
