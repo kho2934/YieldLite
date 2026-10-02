@@ -1,8 +1,4 @@
-"""Load the merged 2020–2024 ĐTGT dataset and add quality flags.
-
-Some commune names contain literal "?" characters from an earlier export, so
-their original Vietnamese spelling cannot be recovered from this CSV.
-"""
+"""Load the merged 2020–2024 ĐTGT dataset and add quality flags."""
 
 from pathlib import Path
 
@@ -56,7 +52,7 @@ KNOWN_VARIETIES = {
 
 def load_final_dataset(path: str | Path) -> pd.DataFrame:
     """Load the merged CSV, clean key fields, and add quality flags."""
-    df = pd.read_csv(path, encoding="latin1").rename(columns=COLUMNS)
+    df = pd.read_csv(path, encoding="utf-8-sig").rename(columns=COLUMNS)
 
     df["household_size"] = pd.to_numeric(
         df["household_size"].str.strip(),
@@ -65,12 +61,12 @@ def load_final_dataset(path: str | Path) -> pd.DataFrame:
 
     df["sowing_date"] = pd.to_datetime(
         df["sowing_date"],
-        format="%m/%d/%Y",
+        format="%Y-%m-%d",
     )
 
     df["harvest_date"] = pd.to_datetime(
         df["harvest_date"],
-        format="%m/%d/%Y",
+        format="%Y-%m-%d",
         errors="coerce",
     )
 
