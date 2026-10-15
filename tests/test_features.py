@@ -9,7 +9,6 @@ from yieldlite.features import (
     npk_total,
 )
 
-
 # NPK calculations
 
 def _nutrient_data(

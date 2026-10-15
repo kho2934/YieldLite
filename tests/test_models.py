@@ -12,7 +12,6 @@ from sklearn.model_selection import (
 
 from yieldlite.models import SeasonDistrictTable, build_m1
 
-
 # M0: season-and-district baseline
 
 def _m0_toy_data() -> tuple[pd.DataFrame, pd.Series]:

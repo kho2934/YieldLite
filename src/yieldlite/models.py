@@ -23,7 +23,6 @@ from sklearn.preprocessing import (
 )
 from sklearn.utils.validation import check_is_fitted
 
-
 _M0_COLUMNS = ("season", "district_code")
 _M1_COLUMNS = (
     "season",
@@ -82,7 +81,7 @@ class SeasonDistrictTable(RegressorMixin, BaseEstimator):
         self,
         X: pd.DataFrame,
         y: pd.Series,
-    ) -> "SeasonDistrictTable":
+    ) -> SeasonDistrictTable:
         """Learn the overall, season, and season-district averages."""
         _require_columns(X, _M0_COLUMNS)
 

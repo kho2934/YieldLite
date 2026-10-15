@@ -6,7 +6,6 @@ panels should remain untouched until the final forward test in Week 8.
 
 import pandas as pd
 
-
 # These four panels are reserved for final testing. Checking the exact set
 # prevents a new or renamed panel from quietly changing the holdout data.
 EXPECTED_HOLDOUT_PANELS = {"DX_2023", "HT_2024", "TD_2023", "TD_2024"}

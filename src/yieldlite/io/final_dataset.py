@@ -6,7 +6,6 @@ import pandas as pd
 
 from yieldlite.io.codes import parse_household_code
 
-
 # Original column name mapped to the name used by yieldlite.
 COLUMNS = {
     "ma": "household_code",
@@ -75,7 +74,7 @@ def load_final_dataset(path: str | Path) -> pd.DataFrame:
     df["code_flag"] = [code.flag for code in parsed]
     df["district_mismatch"] = [
         code.district != district
-        for code, district in zip(parsed, df["district_code"])
+        for code, district in zip(parsed, df["district_code"], strict=True)
     ]
     df["commune_corrupted"] = df["commune_raw"].str.contains(
         "?",

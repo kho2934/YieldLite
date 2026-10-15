@@ -5,7 +5,6 @@ import pytest
 
 from yieldlite.split import lock_holdout
 
-
 # Use the 12 panels from the project so the tests reflect the structure of
 # the real dataset instead of an unrelated example.
 _PANELS = [
