@@ -27,14 +27,29 @@ _NUTRIENT_COLUMNS = (
     "potassium_kg_ha",
 )
 
+# Sowing months that fit each season, taken from the valid rows of the survey.
+_SOWING_MONTHS = {
+    "DX": (10, 11, 12),
+    "HT": (1, 2, 3, 4, 5),
+    "TD": (4, 5, 6, 7),
+}
+
+# Crop duration in days. The middle half of valid rows lies in 94-104 days.
+_MIN_DURATION_DAYS = 70
+_MAX_DURATION_DAYS = 140
+
 
 def flag_rows(df: pd.DataFrame) -> pd.Series:
     """Mark rows that contain a possible data-quality problem.
 
-    A row is flagged when its household code is not certain, its variety is
+    A row is flagged when its household code is unresolved, its variety is
     unclear or unresolved, its district disagrees with the household code,
     its commune name is corrupted, or its harvest date is not later than its
-    sowing date.
+    sowing date. A missing date also counts.
+
+    An inferred household code is not flagged here. In this dataset, it means
+    that a documented commune alias was normalized from Trung Kiên to
+    Trung Nhứt in Thốt Nốt, while the district code remains known.
 
     A variety labeled ``"other"`` is not flagged because it is treated as a
     real variety outside the named list. Rare and unseen varieties are handled
@@ -64,10 +79,6 @@ def flag_rows(df: pd.DataFrame) -> pd.Series:
     if missing:
         raise ValueError(f"df is missing columns: {missing}")
 
-    dates = df[["sowing_date", "harvest_date"]]
-    if dates.isna().any().any():
-        raise ValueError("sowing_date and harvest_date cannot be missing")
-
     non_datetime = [
         column
         for column in ("sowing_date", "harvest_date")
@@ -84,16 +95,19 @@ def flag_rows(df: pd.DataFrame) -> pd.Series:
         if not pd.api.types.is_bool_dtype(df[column].dtype):
             raise ValueError(f"{column} must be a boolean column")
 
-    uncertain_code = ~df["code_flag"].eq("certain").fillna(False)
+    # "Inferred" is an accepted alias correction. Unresolved, missing,
+    # or unexpected code statuses still represent a quality concern.
+    doubtful_code = ~df["code_flag"].isin({"certain", "inferred"})
 
     # Only "known" and "other" currently represent usable variety labels.
     # Unclear, unresolved, missing, or unexpected labels are flagged.
     uncertain_variety = ~df["variety_flag"].isin({"known", "other"})
 
-    bad_dates = df["harvest_date"] <= df["sowing_date"]
+    # A missing date makes this comparison False, so the row is flagged.
+    bad_dates = ~(df["harvest_date"] > df["sowing_date"])
 
     flagged = (
-        uncertain_code
+        doubtful_code
         | uncertain_variety
         | df["district_mismatch"]
         | df["commune_corrupted"]
@@ -101,6 +115,70 @@ def flag_rows(df: pd.DataFrame) -> pd.Series:
     )
 
     return flagged.astype(bool)
+
+
+def trusted_dates(df: pd.DataFrame) -> pd.Series:
+    """Mark rows whose sowing and harvest dates look believable.
+
+    The survey contains date errors from Excel formatting, such as swapped
+    day and month or a wrong year. A row is trusted only when its harvest is
+    after its sowing, the crop duration is 70 to 140 days, and the sowing
+    month fits the row's season. These rules are conservative, so some
+    correct dates may be marked untrusted.
+
+    Models that do not use dates, such as the season-district table and the
+    ridge model, are unaffected. Features built from household dates should
+    use only trusted rows.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Cleaned loader output with ``season``, ``sowing_date`` and
+        ``harvest_date``.
+
+    Returns
+    -------
+    pandas.Series
+        Boolean value for each row, using the same index as ``df``.
+    """
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("df must be a pandas DataFrame")
+
+    if not df.columns.is_unique:
+        raise ValueError("df must have unique column names")
+
+    required = ("season", "sowing_date", "harvest_date")
+    missing = [column for column in required if column not in df.columns]
+    if missing:
+        raise ValueError(f"df is missing columns: {missing}")
+
+    non_datetime = [
+        column
+        for column in ("sowing_date", "harvest_date")
+        if not pd.api.types.is_datetime64_any_dtype(df[column].dtype)
+    ]
+    if non_datetime:
+        raise ValueError(
+            f"date columns must use a datetime dtype: {non_datetime}"
+        )
+
+    duration = (df["harvest_date"] - df["sowing_date"]).dt.days
+    in_order = df["harvest_date"] > df["sowing_date"]
+    plausible_duration = duration.between(
+        _MIN_DURATION_DAYS,
+        _MAX_DURATION_DAYS,
+    )
+
+    months = df["sowing_date"].dt.month
+    fits_season = pd.Series(
+        [
+            month in _SOWING_MONTHS.get(season, ())
+            for month, season in zip(months, df["season"], strict=True)
+        ],
+        index=df.index,
+    )
+
+    return (in_order & plausible_duration & fits_season).astype(bool)
 
 
 def prepare_frame(
@@ -124,7 +202,8 @@ def prepare_frame(
     Returns
     -------
     pandas.DataFrame
-        A copy of ``df`` with ``npk_total_kg_ha`` and ``flagged`` added.
+        A copy of ``df`` with ``npk_total_kg_ha``, ``flagged`` and
+        ``dates_trusted`` added.
     """
     if not isinstance(df, pd.DataFrame):
         raise TypeError("df must be a pandas DataFrame")
@@ -168,5 +247,6 @@ def prepare_frame(
         k_form=k_form,
     )
     out["flagged"] = flag_rows(out)
+    out["dates_trusted"] = trusted_dates(out)
 
     return out

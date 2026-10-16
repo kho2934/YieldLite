@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from yieldlite.prepare import flag_rows, prepare_frame
+from yieldlite.prepare import flag_rows, prepare_frame, trusted_dates
 
 
 def _frame() -> pd.DataFrame:
@@ -12,6 +12,7 @@ def _frame() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "code_flag": ["certain"] * 6 + ["inferred"],
+            "season": ["HT"] * 7,
             "variety_flag": [
                 "known",
                 "other",
@@ -51,7 +52,7 @@ def _frame() -> pd.DataFrame:
     )
 
 
-def test_each_doubt_is_flagged_and_other_variety_is_not():
+def test_model_doubts_are_flagged_but_inferred_code_is_not():
     flags = flag_rows(_frame())
 
     assert flags.tolist() == [
@@ -61,8 +62,17 @@ def test_each_doubt_is_flagged_and_other_variety_is_not():
         True,
         True,
         True,
-        True,
+        False,
     ]
+
+
+def test_unresolved_household_code_is_flagged():
+    df = _frame()
+    df.loc[0, "code_flag"] = "unresolved"
+
+    flags = flag_rows(df)
+
+    assert bool(flags.iloc[0])
 
 
 def test_unresolved_variety_is_flagged():
@@ -89,12 +99,13 @@ def test_missing_columns_are_rejected():
         flag_rows(_frame().drop(columns="code_flag"))
 
 
-def test_missing_dates_are_rejected():
+def test_missing_dates_are_flagged():
     df = _frame()
-    df.loc[0, "sowing_date"] = pd.NaT
+    df.loc[0, "harvest_date"] = pd.NaT
 
-    with pytest.raises(ValueError):
-        flag_rows(df)
+    flags = flag_rows(df)
+
+    assert bool(flags.iloc[0])
 
 
 def test_string_dates_are_rejected():
@@ -125,7 +136,16 @@ def test_prepare_adds_columns_without_changing_input():
     assert "npk_total_kg_ha" not in df.columns
     assert "flagged" not in df.columns
     assert out["npk_total_kg_ha"].iloc[0] == pytest.approx(140.0)
-    assert out["flagged"].sum() == 5
+    assert out["flagged"].sum() == 4
+    assert out["dates_trusted"].tolist() == [
+        True,
+        True,
+        True,
+        True,
+        True,
+        False,
+        True,
+    ]
 
 
 def test_prepare_elemental_exceeds_oxide():
@@ -200,3 +220,81 @@ def test_prepare_rejects_duplicate_index():
             p_form="oxide",
             k_form="oxide",
         )
+
+
+def _date_row(season, sowing, harvest):
+    return pd.DataFrame(
+        {
+            "season": [season],
+            "sowing_date": pd.to_datetime([sowing]),
+            "harvest_date": pd.to_datetime([harvest]),
+        }
+    )
+
+
+def test_believable_dates_are_trusted():
+    df = _date_row("DX", "2020-11-10", "2021-02-18")
+
+    assert bool(trusted_dates(df).iloc[0])
+
+
+def test_harvest_before_sowing_is_untrusted():
+    df = _date_row("HT", "2022-09-03", "2022-06-14")
+
+    assert not bool(trusted_dates(df).iloc[0])
+
+
+def test_too_long_duration_is_untrusted():
+    df = _date_row("HT", "2020-02-10", "2023-05-20")
+
+    assert not bool(trusted_dates(df).iloc[0])
+
+
+def test_too_short_duration_is_untrusted():
+    df = _date_row("HT", "2020-02-10", "2020-02-12")
+
+    assert not bool(trusted_dates(df).iloc[0])
+
+
+def test_sowing_month_outside_season_is_untrusted():
+    df = _date_row("DX", "2021-02-10", "2021-05-20")
+
+    assert not bool(trusted_dates(df).iloc[0])
+
+
+def test_missing_harvest_is_untrusted():
+    df = _date_row("HT", "2020-02-10", "2020-05-20")
+    df.loc[0, "harvest_date"] = pd.NaT
+
+    assert not bool(trusted_dates(df).iloc[0])
+
+
+def test_unknown_season_is_untrusted():
+    df = _date_row("XX", "2020-02-10", "2020-05-20")
+
+    assert not bool(trusted_dates(df).iloc[0])
+
+
+def test_trusted_dates_keep_index_and_are_boolean():
+    df = _date_row("HT", "2020-02-10", "2020-05-20")
+    df.index = [42]
+
+    result = trusted_dates(df)
+
+    assert result.index.equals(df.index)
+    assert result.dtype == bool
+
+
+def test_trusted_dates_need_season_column():
+    df = _date_row("HT", "2020-02-10", "2020-05-20").drop(columns="season")
+
+    with pytest.raises(ValueError):
+        trusted_dates(df)
+
+
+def test_trusted_dates_reject_string_dates():
+    df = _date_row("HT", "2020-02-10", "2020-05-20")
+    df["sowing_date"] = df["sowing_date"].dt.strftime("%Y-%m-%d")
+
+    with pytest.raises(ValueError):
+        trusted_dates(df)
