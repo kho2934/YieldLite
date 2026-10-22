@@ -140,7 +140,7 @@ def main() -> None:
         "draws": args.draws,
         "seed": args.seed,
         "note": (
-            "P and K units are provisional until confirmed by IRRI."
+            "N, P2O5 and K2O are nutrient mass, confirmed by IRRI on 2026-10-22."
         ),
     }
 
