@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "criterion": "The mean paired reduction in MAE across held-out panels must be larger than its standard error and remain so at every larger tested setting.",
+  "n_development_panels": 8,
+  "thresholds": {
+    "P0": {
+      "status": "not_evaluated",
+      "value": null
+    },
+    "P1": {
+      "status": "reached",
+      "value": 3,
+      "at_grid_minimum": true
+    },
+    "H1": {
+      "status": "reached",
+      "value": 20,
+      "at_grid_minimum": false
+    },
+    "W2": {
+      "status": "not_evaluated",
+      "value": null
+    },
+    "N3": {
+      "status": "not_evaluated",
+      "value": null
+    },
+    "P3": {
+      "status": "not_evaluated",
+      "value": null
+    }
+  },
+  "evidence": [
+    {
+      "p": 3,
+      "h": 5,
+      "mean_gain": 0.0015,
+      "se": 0.0111,
+      "n_panels": 8,
+      "passes": false
+    },
+    {
+      "p": 3,
+      "h": 10,
+      "mean_gain": 0.0053,
+      "se": 0.0095,
+      "n_panels": 8,
+      "passes": false
+    },
+    {
+      "p": 3,
+      "h": 20,
+      "mean_gain": 0.0066,
+      "se": 0.0051,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 3,
+      "h": "all",
+      "mean_gain": 0.0094,
+      "se": 0.0056,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 4,
+      "h": 5,
+      "mean_gain": 0.0042,
+      "se": 0.0115,
+      "n_panels": 8,
+      "passes": false
+    },
+    {
+      "p": 4,
+      "h": 10,
+      "mean_gain": 0.0179,
+      "se": 0.0081,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 4,
+      "h": 20,
+      "mean_gain": 0.0184,
+      "se": 0.0076,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 4,
+      "h": "all",
+      "mean_gain": 0.0146,
+      "se": 0.0067,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 5,
+      "h": 5,
+      "mean_gain": 0.0161,
+      "se": 0.0115,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 5,
+      "h": 10,
+      "mean_gain": 0.023,
+      "se": 0.0115,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 5,
+      "h": 20,
+      "mean_gain": 0.0267,
+      "se": 0.0126,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 5,
+      "h": "all",
+      "mean_gain": 0.024,
+      "se": 0.009,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 6,
+      "h": 5,
+      "mean_gain": 0.0237,
+      "se": 0.0196,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 6,
+      "h": 10,
+      "mean_gain": 0.0307,
+      "se": 0.0151,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 6,
+      "h": 20,
+      "mean_gain": 0.0356,
+      "se": 0.0168,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 6,
+      "h": "all",
+      "mean_gain": 0.0306,
+      "se": 0.0124,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 7,
+      "h": 5,
+      "mean_gain": 0.0315,
+      "se": 0.0209,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 7,
+      "h": 10,
+      "mean_gain": 0.046,
+      "se": 0.0228,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 7,
+      "h": 20,
+      "mean_gain": 0.0385,
+      "se": 0.0204,
+      "n_panels": 8,
+      "passes": true
+    },
+    {
+      "p": 7,
+      "h": "all",
+      "mean_gain": 0.0368,
+      "se": 0.0158,
+      "n_panels": 8,
+      "passes": true
+    }
+  ],
+  "run": {
+    "p_form": "oxide",
+    "k_form": "oxide",
+    "p_values": [
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "h_values": [
+      5,
+      10,
+      20,
+      "all"
+    ],
+    "draws": 20,
+    "seed": 0,
+    "note": "N, P2O5 and K2O are nutrient mass, confirmed by IRRI on 2026-10-22."
+  }
+}

@@ -35,3 +35,7 @@ data/
 .vscode/
 .idea/
 .claude/settings.local.json
+
+# Package data that ships with yieldlite (thresholds, climate normals)
+!src/yieldlite/data/
+!src/yieldlite/data/*
