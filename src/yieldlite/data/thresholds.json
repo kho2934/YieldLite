@@ -4,8 +4,9 @@
   "n_development_panels": 8,
   "thresholds": {
     "P0": {
-      "status": "not_evaluated",
-      "value": null
+      "status": "reached",
+      "value": 4,
+      "at_grid_minimum": false
     },
     "P1": {
       "status": "reached",
@@ -192,6 +193,71 @@
       "passes": true
     }
   ],
+  "coverage": {
+    "criterion": "At a panel count, an interval is trusted only when its level is supported and its mean coverage across held-out panels is at least the level minus one standard error, for every model and household setting tested. This must also hold at every larger tested panel count.",
+    "level": 0.8,
+    "evidence": [
+      {
+        "p": 3,
+        "n_settings": 8,
+        "n_passing": 0,
+        "lowest_coverage": null,
+        "passes": false
+      },
+      {
+        "p": 4,
+        "n_settings": 8,
+        "n_passing": 8,
+        "lowest_coverage": 0.9927,
+        "passes": true
+      },
+      {
+        "p": 5,
+        "n_settings": 8,
+        "n_passing": 8,
+        "lowest_coverage": 0.9593,
+        "passes": true
+      },
+      {
+        "p": 6,
+        "n_settings": 8,
+        "n_passing": 8,
+        "lowest_coverage": 0.9447,
+        "passes": true
+      },
+      {
+        "p": 7,
+        "n_settings": 8,
+        "n_passing": 8,
+        "lowest_coverage": 0.9155,
+        "passes": true
+      }
+    ],
+    "run": {
+      "p_form": "oxide",
+      "k_form": "oxide",
+      "p_values": [
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "h_values": [
+        5,
+        10,
+        20,
+        "all"
+      ],
+      "levels": [
+        0.5,
+        0.8
+      ],
+      "draws": 10,
+      "seed": 0,
+      "note": "N, P2O5 and K2O are nutrient mass, confirmed by IRRI on 2026-10-22."
+    }
+  },
   "run": {
     "p_form": "oxide",
     "k_form": "oxide",

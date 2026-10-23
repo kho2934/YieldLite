@@ -1,8 +1,11 @@
-"""Create thresholds.json from the saved degradation-study results.
+"""Create thresholds.json from the saved study results.
 
 Run from the project root with:
 
     python experiments/make_thresholds.py
+
+The degradation study gives P1 and H1. When the interval study has also been
+run, its results give P0.
 """
 
 from __future__ import annotations
@@ -14,10 +17,28 @@ from pathlib import Path
 import pandas as pd
 
 from yieldlite.thresholds import (
+    coverage_check,
     derive_thresholds,
     paired_gain,
     write_thresholds,
 )
+
+
+def _read_intervals(
+    folder: Path,
+) -> tuple[pd.DataFrame | None, dict[str, object] | None]:
+    """Load the interval-study summary and settings, if they were saved."""
+    summary_path = folder / "interval_summary.csv"
+    if not summary_path.exists():
+        return None, None
+
+    summary = pd.read_csv(summary_path)
+    summary["h"] = pd.to_numeric(summary["h"])
+
+    settings = json.loads(
+        (folder / "interval_settings.json").read_text(encoding="utf-8")
+    )
+    return summary, settings
 
 
 def main() -> None:
@@ -50,9 +71,13 @@ def main() -> None:
         )
     )
 
+    intervals, interval_info = _read_intervals(results_folder)
+
     thresholds = derive_thresholds(
         results,
         run_info=run_info,
+        intervals=intervals,
+        interval_info=interval_info,
     )
     write_thresholds(thresholds, args.out)
 
@@ -64,6 +89,15 @@ def main() -> None:
             float_format=lambda value: f"{value:.4f}",
         )
     )
+
+    if intervals is not None:
+        print()
+        print(
+            coverage_check(intervals).to_string(
+                index=False,
+                float_format=lambda value: f"{value:.4f}",
+            )
+        )
 
     print()
     for name, entry in thresholds["thresholds"].items():
