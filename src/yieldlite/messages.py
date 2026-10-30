@@ -42,6 +42,28 @@ RUNG_NAMES: dict[str, dict[str, str]] = {
 _RUNG_FIELDS = ("rung", "simpler", "needs")
 
 CATALOG: dict[str, dict[Lang, str]] = {
+    "result_estimate": {
+        "en": (
+            "Expected yield: {estimate:.1f} t/ha, most likely between "
+            "{lower:.1f} and {upper:.1f} t/ha ({level}% range)."
+        ),
+        "vi": (
+            "Năng suất dự kiến: {estimate:.1f} t/ha, với khoảng dự đoán "
+            "từ {lower:.1f} đến {upper:.1f} t/ha (mức {level}%)."
+        ),
+    },
+    "result_history": {
+        "en": (
+            "Past yields for {district} in {season} were usually between "
+            "{lower:.1f} and {upper:.1f} t/ha "
+            "({level}% of past records)."
+        ),
+        "vi": (
+            "Năng suất trước đây tại huyện {district} trong vụ {season} "
+            "thường nằm trong khoảng từ {lower:.1f} đến {upper:.1f} t/ha "
+            "(bao gồm {level}% số liệu lịch sử)."
+        ),
+    },
     # Reasons for refusing or placing a warning on a prediction.
     "too_few_panels": {
         "en": (

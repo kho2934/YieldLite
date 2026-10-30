@@ -18,6 +18,19 @@ from yieldlite.selection import PanelGain, SelectionPolicy
 
 # One set of example values for every message.
 _SAMPLE = {
+    "result_estimate": {
+        "estimate": 5.4,
+        "lower": 4.8,
+        "upper": 6.1,
+        "level": 80,
+    },
+    "result_history": {
+        "district": "CD",
+        "season": "DX",
+        "lower": 5.0,
+        "upper": 6.2,
+        "level": 80,
+    },
     "too_few_panels": {"panels": 3, "needed": 4},
     "too_few_panels_unknown": {"panels": 3},
     "unknown_district": {"district": "XX"},
