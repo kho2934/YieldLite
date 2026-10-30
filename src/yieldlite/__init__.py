@@ -5,6 +5,7 @@ from importlib.metadata import (
     version,
 )
 
+from yieldlite.plots import plot_prediction
 from yieldlite.result import PredictionResult
 from yieldlite.yieldmodel import YieldModel
 
@@ -19,4 +20,5 @@ __all__ = [
     "PredictionResult",
     "YieldModel",
     "__version__",
+    "plot_prediction",
 ]
