@@ -102,13 +102,13 @@ CATALOG: dict[str, dict[Lang, str]] = {
     "npk_out_of_range": {
         "en": (
             "The fertilizer amount, {npk} kg/ha, is outside the range found "
-            "in the training data ({low} to {high} kg/ha). The estimate may "
-            "therefore be unreliable."
+            "in the training data ({low} to {high} kg/ha). Yieldlite does "
+            "not extrapolate, so no prediction is made."
         ),
         "vi": (
             "Tổng lượng phân bón là {npk} kg/ha, nằm ngoài khoảng đã xuất "
             "hiện trong dữ liệu huấn luyện ({low} đến {high} kg/ha). Vì vậy, "
-            "kết quả ước tính có thể không đáng tin cậy."
+            "Yieldlite không ngoại suy nên không đưa ra dự đoán."
         ),
     },
     "npk_unit_unresolved": {
@@ -176,7 +176,7 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "vi": (
             "Chọn {rung}. Khi lần lượt giữ lại từng vụ trong tổng số "
             "{compared} vụ để kiểm tra, mô hình này dự đoán tốt hơn {simpler} "
-            "trung bình {gain:.2f} t/ha, với sai số chuẩn là {se:.2f}."
+            " trung bình {gain:.2f} t/ha, với sai số chuẩn là {se:.2f}."
         ),
     },
     "rung_selected_simplest": {

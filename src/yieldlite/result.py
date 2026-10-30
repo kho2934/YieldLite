@@ -35,6 +35,7 @@ REFUSAL_CODES = frozenset(
         "unknown_district",
         "season_unresolved",
         "npk_unit_unresolved",
+        "npk_out_of_range",
         "level_unsupported",
         "interval_uninformative",
     }
@@ -43,7 +44,6 @@ REFUSAL_CODES = frozenset(
 # These reasons allow a prediction, but the user should still be warned.
 FLAG_CODES = frozenset(
     {
-        "npk_out_of_range",
         "variety_pooled",
         "history_thin",
     }
