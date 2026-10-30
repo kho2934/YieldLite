@@ -1,30 +1,40 @@
-"""Study how prediction intervals behave as the training data gets smaller.
+"""Measure how prediction intervals change as training data becomes smaller.
 
-This is the uncertainty version of the model degradation study. One
-development panel is held out at a time, while each model is trained and
-calibrated on progressively smaller samples of the remaining panels. The
-resulting intervals are then evaluated on the households in the held-out
-panel.
+This study mirrors the model degradation study, but focuses on uncertainty.
+It holds out one development panel at a time, trains each model on smaller
+samples of the remaining panels, and evaluates the resulting intervals on the
+households in the unseen panel.
 
-The study records three main measurements:
+The study records five main measurements:
 
-* ``coverage``: how often the observed yield falls inside the interval;
-* ``width``: the average size of the interval;
-* ``informative``: the share of households whose interval is narrower than
-  the usual yield range for their district and season.
+* ``coverage``: how often the observed yield falls inside the prediction
+  interval;
+* ``width``: the average width of that interval;
+* ``informative``: among households with a historical comparison, the share
+  whose prediction interval is narrower than the usual yield range;
+* ``history_coverage``: how often the observed yield falls inside the usual
+  historical range itself;
+* ``assessable``: the share of households whose district-season cell has
+  enough training rows to calculate a historical range.
 
-The last measurement matters because an interval that is as wide as the
-historical yield range does not tell a farmer much more than the past data
-already showed.
+The historical range gives the prediction interval a practical comparison.
+If both are equally wide, the model may not be telling the farmer much more
+than past yields already showed. However, that comparison is meaningful only
+when the historical range itself covers new observations reasonably well.
+A range that misses too many new-season yields may be overconfident.
 
-With ``p`` training panels, the highest interval level that can remain finite
-is ``p / (p + 1)``. See ``yieldlite.conformal`` for the explanation. When a
-requested level is higher than this limit, the study records it as unsupported
-instead of trying to score an invalid interval.
+Historical ranges are calculated from the same training rows used to fit the
+interval model. A district-season cell with too few rows is left unassessable
+instead of borrowing a range from unrelated farms. Those households are not
+included in ``informative``, ``history_coverage``, or ``ref_width``.
 
-This module only measures interval behavior. The decision about how these
-results should determine the ``P0`` threshold is made separately after the
-study has been reviewed.
+With ``p`` training panels, the largest interval level that can remain finite
+is ``p / (p + 1)``. See ``yieldlite.conformal`` for the reasoning. A requested
+level above that limit is recorded as unsupported rather than scored as if it
+were valid.
+
+This module measures interval behavior only. The separate threshold process
+uses these results to decide the value of ``P0``.
 """
 
 from __future__ import annotations
@@ -43,7 +53,7 @@ from yieldlite.degradation import (
     cap_households_per_cell,
     sample_panel_subsets,
 )
-from yieldlite.history import typical_range
+from yieldlite.history import typical_interval
 from yieldlite.ladder import RUNGS, build_rung
 from yieldlite.study import TARGET, _check_development_rows
 
@@ -61,12 +71,19 @@ INTERVAL_COLUMNS = (
     "width",
     "ref_width",
     "informative",
+    "assessable",
+    "history_coverage",
 )
 
 
-def _check_levels(levels: Iterable[float]) -> list[float]:
-    """Check the requested interval levels and return them as floats."""
-    level_list = [float(level) for level in levels]
+def _check_levels(
+    levels: Iterable[float],
+) -> list[float]:
+    """Validate the requested interval levels and return them as floats."""
+    level_list = [
+        float(level)
+        for level in levels
+    ]
 
     if not level_list:
         raise ValueError("levels cannot be empty")
@@ -80,9 +97,66 @@ def _check_levels(levels: Iterable[float]) -> list[float]:
         )
 
     if len(set(level_list)) != len(level_list):
-        raise ValueError("interval levels cannot be repeated")
+        raise ValueError(
+            "interval levels cannot be repeated"
+        )
 
     return level_list
+
+
+def _assessable_history(
+    usual_lower: np.ndarray,
+    usual_upper: np.ndarray,
+) -> np.ndarray:
+    """Return which rows have two finite historical bounds."""
+    return (
+        np.isfinite(usual_lower)
+        & np.isfinite(usual_upper)
+    )
+
+
+def _score_history(
+    observed: np.ndarray,
+    usual_lower: np.ndarray,
+    usual_upper: np.ndarray,
+) -> dict[str, float]:
+    """Evaluate the usual yield range on the held-out households.
+
+    Only households with two finite historical bounds are included.
+    ``assessable`` records the share of held-out households that meet this
+    requirement.
+
+    If no household can be assessed, ``history_coverage`` and ``ref_width``
+    are returned as ``NaN``.
+    """
+    assessable = _assessable_history(
+        usual_lower,
+        usual_upper,
+    )
+
+    if not assessable.any():
+        return {
+            "assessable": 0.0,
+            "history_coverage": np.nan,
+            "ref_width": np.nan,
+        }
+
+    lower = usual_lower[assessable]
+    upper = usual_upper[assessable]
+
+    return {
+        "assessable": float(
+            np.mean(assessable)
+        ),
+        "history_coverage": interval_coverage(
+            observed[assessable],
+            lower,
+            upper,
+        ),
+        "ref_width": float(
+            np.mean(upper - lower)
+        ),
+    }
 
 
 def _score_interval(
@@ -90,13 +164,18 @@ def _score_interval(
     test: pd.DataFrame,
     observed: np.ndarray,
     level: float,
-    usual: np.ndarray,
+    usual_lower: np.ndarray,
+    usual_upper: np.ndarray,
 ) -> dict[str, object]:
-    """Score one interval level on the held-out households.
+    """Evaluate one prediction-interval level on a held-out panel.
 
-    If the fitted model does not have enough panels to support the requested
-    level, the result is marked as unsupported and the four interval
-    measurements are returned as ``NaN``.
+    If the fitted panel count cannot support the requested level, the result
+    is marked as unsupported and its coverage, width, and informativeness are
+    returned as ``NaN``.
+
+    Informativeness is measured only for households with an assessable
+    historical range. It is also ``NaN`` when none of the held-out households
+    has one.
     """
     try:
         lower, upper = intervals.predict_interval(
@@ -108,11 +187,30 @@ def _score_interval(
             "supported": False,
             "coverage": np.nan,
             "width": np.nan,
-            "ref_width": np.nan,
             "informative": np.nan,
         }
 
-    widths = upper - lower
+    widths = np.asarray(
+        upper - lower,
+        dtype=float,
+    )
+    assessable = _assessable_history(
+        usual_lower,
+        usual_upper,
+    )
+
+    informative = np.nan
+    if assessable.any():
+        historical_widths = (
+            usual_upper[assessable]
+            - usual_lower[assessable]
+        )
+        informative = float(
+            np.mean(
+                widths[assessable]
+                < historical_widths
+            )
+        )
 
     return {
         "supported": True,
@@ -121,11 +219,10 @@ def _score_interval(
             lower,
             upper,
         ),
-        "width": float(np.mean(widths)),
-        "ref_width": float(np.mean(usual)),
-        "informative": float(
-            np.mean(widths < usual)
+        "width": float(
+            np.mean(widths)
         ),
+        "informative": informative,
     }
 
 
@@ -140,59 +237,67 @@ def run_interval_study(
     min_variety_count: int = 30,
     progress: Callable[[str], None] | None = None,
 ) -> pd.DataFrame:
-    """Evaluate prediction intervals while reducing the training data.
+    """Evaluate prediction intervals as the training data is reduced.
 
-    For each development panel, this function holds that panel out and builds
-    interval models from subsets of the remaining panels. It varies both the
-    number of training panels and the maximum number of households retained
-    in each district-season cell.
+    Each development panel is held out in turn. Interval models are trained
+    on sampled subsets of the remaining panels while varying both the number
+    of panels and the number of households kept in each district-season cell.
 
     Parameters
     ----------
     dev : pandas.DataFrame
         Development data only. The locked final holdout must not be included.
-        The table needs ``panel_id``, ``season``, ``district_code``,
+        Required columns include ``panel_id``, ``season``, ``district_code``,
         ``variety_raw``, ``variety_flag``, ``npk_total_kg_ha``, and
         ``yield_t_ha``.
     p_values : iterable of int
-        Numbers of training panels to test. Each value must be at least the
-        number of seasons and no larger than the number of available panels
-        minus one.
+        Numbers of training panels to evaluate. Each value must be at least
+        the number of seasons and no larger than the total number of
+        development panels minus one.
     h_values : iterable of int or None
-        Maximum number of households to keep in each district-season cell.
-        ``None`` keeps every available household.
+        Maximum households retained in each district-season cell. ``None``
+        keeps every available household.
     levels : iterable of float, default (0.5, 0.8)
-        Nominal interval levels to evaluate.
+        Nominal prediction-interval levels to evaluate.
     n_draws : int, default 10
-        Maximum number of randomly sampled panel sets for each held-out panel
-        and value of ``p``. Fewer draws are used when fewer valid panel sets
-        exist.
+        Maximum number of sampled panel sets for each held-out panel and value
+        of ``p``. Fewer draws are used when fewer valid sets exist.
     seed : int, default 0
-        Random seed used to make the study reproducible.
+        Random seed that makes the complete study reproducible.
     models : sequence of str, default all registered rungs
-        Names of the models to evaluate. Each name must appear in
-        ``yieldlite.ladder.RUNGS``.
+        Model names listed in ``yieldlite.ladder.RUNGS``.
     min_variety_count : int, default 30
-        Minimum number of training rows required for a variety to keep its
+        Minimum number of training rows required for a variety to remain its
         own category.
     progress : callable, optional
-        Function that receives a short update after each held-out panel has
-        been completed. Passing ``print`` displays progress during the study.
+        Function that receives a short update after each held-out panel is
+        completed. Passing ``print`` displays progress while the study runs.
 
     Returns
     -------
     pandas.DataFrame
         One row for every held-out panel, panel count, random draw, household
-        cap, model, and interval level. The returned columns follow
-        ``INTERVAL_COLUMNS``.
+        cap, model, and interval level. Columns follow ``INTERVAL_COLUMNS``.
 
-        ``h`` is stored as infinity when no household cap is used.
-        ``ref_width`` is the average historical yield range used as the
-        comparison point. ``informative`` is the share of held-out households
-        whose prediction interval is narrower than that range.
+        ``h`` is stored as infinity when no household cap is applied.
 
-        When a panel count cannot support the requested interval level,
-        ``supported`` is false and the four interval scores are ``NaN``.
+        The usual yield interval contains the central historical share
+        matching the requested prediction level. It is calculated from the
+        training yields in the same district and season. A cell needs at
+        least ten training rows, as defined by ``typical_interval``.
+
+        ``assessable`` is the share of held-out households with a historical
+        range. ``history_coverage`` is the share of those households whose
+        observed yield falls inside that range, and ``ref_width`` is its
+        average width. ``informative`` is the share whose prediction interval
+        is narrower than the historical range.
+
+        If no historical range can be assessed, ``history_coverage``,
+        ``ref_width``, and ``informative`` are ``NaN``.
+
+        When the training panels cannot support a requested prediction level,
+        ``supported`` is false and the prediction-interval measurements are
+        ``NaN``. The separate historical measurements remain available.
     """
     panel_season = _check_development_rows(dev)
 
@@ -208,7 +313,10 @@ def run_interval_study(
 
     level_list = _check_levels(levels)
 
-    p_list = [int(p) for p in p_values]
+    p_list = [
+        int(p)
+        for p in p_values
+    ]
     h_list = list(h_values)
 
     if not p_list or not h_list:
@@ -216,7 +324,9 @@ def run_interval_study(
             "p_values and h_values cannot be empty"
         )
 
-    n_seasons = int(panel_season.nunique())
+    n_seasons = int(
+        panel_season.nunique()
+    )
     n_panels = len(panel_season)
 
     invalid_panel_counts = [
@@ -236,14 +346,16 @@ def run_interval_study(
     rng = np.random.default_rng(seed)
     records: list[dict[str, object]] = []
 
-    held_out_panels = sorted(panel_season.index)
+    held_out_panels = sorted(
+        panel_season.index
+    )
 
     for completed, held_out in enumerate(
         held_out_panels,
         start=1,
     ):
-        remaining_panel_seasons = panel_season.drop(
-            held_out
+        remaining_panel_seasons = (
+            panel_season.drop(held_out)
         )
         test = dev.loc[
             dev["panel_id"] == held_out
@@ -272,13 +384,23 @@ def run_interval_study(
                         rng,
                     )
 
-                    # Calculate the historical comparison range separately
-                    # for every interval level.
+                    # The historical ranges use only the current training
+                    # rows, so they do not see the held-out panel. They are
+                    # also independent of the model and need to be calculated
+                    # only once for each requested level.
                     usual_ranges = {
-                        level: typical_range(
+                        level: typical_interval(
                             train,
                             test,
                             level,
+                        )
+                        for level in level_list
+                    }
+
+                    history_scores = {
+                        level: _score_history(
+                            observed,
+                            *usual_ranges[level],
                         )
                         for level in level_list
                     }
@@ -298,12 +420,12 @@ def run_interval_study(
                         )
 
                         for level in level_list:
-                            scores = _score_interval(
+                            interval_scores = _score_interval(
                                 intervals,
                                 test,
                                 observed,
                                 level,
-                                usual_ranges[level],
+                                *usual_ranges[level],
                             )
 
                             records.append(
@@ -320,7 +442,8 @@ def run_interval_study(
                                     "level": level,
                                     "n_train": len(train),
                                     "n_test": len(test),
-                                    **scores,
+                                    **history_scores[level],
+                                    **interval_scores,
                                 }
                             )
 
@@ -328,7 +451,8 @@ def run_interval_study(
             progress(
                 "finished held-out panel "
                 f"{held_out} "
-                f"({completed} of {len(held_out_panels)})"
+                f"({completed} of "
+                f"{len(held_out_panels)})"
             )
 
     return pd.DataFrame.from_records(
@@ -342,13 +466,15 @@ def summarize_intervals(
 ) -> pd.DataFrame:
     """Summarize interval performance across draws and held-out panels.
 
-    Results are first averaged across random draws within each held-out panel.
-    They are then averaged across panels. This gives every panel equal weight,
-    because panels—not individual households—are the independent units used
-    to judge generalization.
+    Random draws are averaged within each held-out panel first. The panel
+    results are then averaged together. This gives every panel equal weight,
+    because panels—not individual household rows—are the independent units
+    used to judge generalization.
 
-    ``coverage_se`` is the standard error of mean coverage across the held-out
-    panels.
+    ``coverage_se`` is the standard error of prediction-interval coverage
+    across held-out panels. ``history_coverage_se`` applies the same
+    calculation to the historical range, using only panels where that range
+    could be assessed.
 
     Parameters
     ----------
@@ -358,20 +484,25 @@ def summarize_intervals(
     Returns
     -------
     pandas.DataFrame
-        One row for each model, interval level, panel count, and household
+        One row for every model, interval level, panel count, and household
         cap. The summary includes:
 
         * ``supported``: true only when every draw was supported;
-        * ``coverage``: mean coverage across held-out panels;
-        * ``coverage_sd``: variation in coverage across panels;
-        * ``coverage_se``: standard error of mean panel coverage;
-        * ``width``: mean prediction-interval width;
-        * ``ref_width``: mean historical comparison width;
+        * ``coverage``: average prediction-interval coverage;
+        * ``coverage_sd``: variation in coverage across held-out panels;
+        * ``coverage_se``: standard error of average panel coverage;
+        * ``width``: average prediction-interval width;
+        * ``ref_width``: average historical-range width;
         * ``informative``: share of intervals narrower than the historical
-          comparison range;
+          range among assessable households;
+        * ``assessable``: share of households with a historical range;
+        * ``history_coverage``: average historical-range coverage;
+        * ``history_coverage_se``: standard error of historical coverage;
         * ``n_panels``: number of held-out panels represented.
 
-        Scores remain ``NaN`` when the requested level was unsupported.
+        Prediction-interval scores remain ``NaN`` when the requested level is
+        unsupported. Historical-range scores remain ``NaN`` when no
+        household in a panel can be assessed.
     """
     missing = [
         column
@@ -384,7 +515,9 @@ def summarize_intervals(
         )
 
     if results.empty:
-        raise ValueError("results cannot be empty")
+        raise ValueError(
+            "results cannot be empty"
+        )
 
     keys = [
         "model",
@@ -393,7 +526,7 @@ def summarize_intervals(
         "h",
     ]
 
-    # Average repeated draws within each held-out panel first.
+    # Average repeated draws for each held-out panel before comparing panels.
     per_panel = results.groupby(
         [*keys, "held_out"],
         as_index=False,
@@ -403,10 +536,14 @@ def summarize_intervals(
         width=("width", "mean"),
         ref_width=("ref_width", "mean"),
         informative=("informative", "mean"),
+        assessable=("assessable", "mean"),
+        history_coverage=(
+            "history_coverage",
+            "mean",
+        ),
     )
 
-    # Then average across panels so that a large panel does not receive more
-    # influence simply because it contains more households.
+    # Give each held-out panel equal weight, even when panel sizes differ.
     summary = per_panel.groupby(
         keys,
         as_index=False,
@@ -417,12 +554,31 @@ def summarize_intervals(
         width=("width", "mean"),
         ref_width=("ref_width", "mean"),
         informative=("informative", "mean"),
+        assessable=("assessable", "mean"),
+        history_coverage=(
+            "history_coverage",
+            "mean",
+        ),
+        history_coverage_sd=(
+            "history_coverage",
+            "std",
+        ),
+        history_panels=(
+            "history_coverage",
+            "count",
+        ),
         n_panels=("held_out", "nunique"),
     )
 
     summary["coverage_se"] = (
         summary["coverage_sd"]
         / np.sqrt(summary["n_panels"])
+    )
+    summary["history_coverage_se"] = (
+        summary["history_coverage_sd"]
+        / np.sqrt(
+            summary["history_panels"]
+        )
     )
 
     columns = [
@@ -434,6 +590,9 @@ def summarize_intervals(
         "width",
         "ref_width",
         "informative",
+        "assessable",
+        "history_coverage",
+        "history_coverage_se",
         "n_panels",
     ]
 
