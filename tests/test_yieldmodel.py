@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from yieldlite.messages import render_reasons
 from yieldlite.result import PredictionResult
 from yieldlite.yieldmodel import YieldModel
 
@@ -508,8 +509,8 @@ def test_district_and_season_must_be_non_empty_text(value):
 def test_explain_returns_each_decision_in_both_languages():
     model = _fit()
 
-    english = model.explain("en")
-    vietnamese = model.explain("vi")
+    english = model.explain("en", verbose=True)
+    vietnamese = model.explain("vi", verbose=True)
 
     assert (
         len(english)
@@ -663,3 +664,36 @@ def test_public_classes_are_available_from_the_package():
         yieldlite.PredictionResult
         is PredictionResult
     )
+
+
+def test_explain_hides_models_whose_data_needs_were_not_studied():
+    model = _fit()
+    reasons = model.selection_.reasons
+    kept = [
+        reason
+        for reason in reasons
+        if reason.code != "rung_not_evaluated"
+    ]
+
+    # The packaged thresholds leave M2 and M3 not evaluated.
+    assert len(kept) < len(reasons)
+
+    for lang in ("en", "vi"):
+        assert model.explain(lang) == render_reasons(kept, lang)
+        assert model.explain(lang, verbose=True) == render_reasons(
+            reasons, lang
+        )
+
+
+def test_explain_still_ends_with_the_chosen_model():
+    model = _fit()
+
+    assert model.explain("en")[-1].startswith("Using")
+    assert model.explain("vi")[-1].startswith("Chọn")
+
+
+def test_explain_rejects_a_verbose_flag_that_is_not_true_or_false():
+    model = _fit()
+
+    with pytest.raises(TypeError, match="verbose"):
+        model.explain("en", verbose="yes")

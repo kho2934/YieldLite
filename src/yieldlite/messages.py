@@ -176,7 +176,7 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "vi": (
             "Chọn {rung}. Khi lần lượt giữ lại từng vụ trong tổng số "
             "{compared} vụ để kiểm tra, mô hình này dự đoán tốt hơn {simpler} "
-            " trung bình {gain:.2f} t/ha, với sai số chuẩn là {se:.2f}."
+            "trung bình {gain:.2f} t/ha, với sai số chuẩn là {se:.2f}."
         ),
     },
     "rung_selected_simplest": {

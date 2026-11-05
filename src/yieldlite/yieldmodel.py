@@ -280,14 +280,39 @@ class YieldModel:
 
         return self
 
-    def explain(self, lang: str = "en") -> list[str]:
-        """Explain the model choice in English or Vietnamese."""
+    def explain(self, lang: str = "en", verbose: bool = False) -> list[str]:
+        """Explain the model choice in English or Vietnamese.
+
+        Parameters
+        ----------
+        lang : {"en", "vi"}, default "en"
+            Language of the explanation.
+        verbose : bool, default False
+            Also list the models that were skipped because the data they
+            need has not been studied yet (M2 and M3 in this version). They
+            are hidden by default because they are not built, so a reader
+            cannot act on them.
+
+        Returns
+        -------
+        list of str
+            One sentence per decision, ending with the model that was
+            chosen.
+        """
+        if not isinstance(verbose, bool):
+            raise TypeError("verbose must be True or False")
+
         self._check_fitted()
 
-        return render_reasons(
-            self.selection_.reasons,
-            lang,
-        )
+        reasons = self.selection_.reasons
+        if not verbose:
+            reasons = [
+                reason
+                for reason in reasons
+                if reason.code != "rung_not_evaluated"
+            ]
+
+        return render_reasons(reasons, lang)
 
     def predict(
         self,
